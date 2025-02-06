@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "idas.fullname" . }}
+  labels:
+    {{- include "idas.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "idas.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "idas.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "idas.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["idas.js"]
+          envFrom:
+            - secretRef:
+                name: {{ include "idas.fullname" . }}
+          env:
+            - name: DEBUG_LEVEL
+              value: "{{ .Values.env.DEBUG }}"
+            - name: KEYCLOAK_URL
+              value: {{ required "KEYCLOAKURL is required" .Values.env.KEYCLOAKURL }}
+            - name: CLIENT_ID
+              value: {{ required "CLIENTID is required" .Values.env.CLIENTID }}
+            - name: TOKEN_INTERVAL
+              value: "{{ .Values.env.TOKENINTERVAL }}"
+            - name: ORION_URL
+              value: {{ required "ORIONURL is required" .Values.env.ORIONURL }}
+            - name: NGSILD_TENANT
+              value: "{{ .Values.env.NGSILDTENANT }}"
+            - name: NOTIFICATION_URL
+              value: "http://{{ include "idas.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.service.port }}"
+            - name: SMTP_HOST
+              value: "{{ .Values.env.SMTPHOST }}"
+            - name: SMTP_USER
+              value: "{{ .Values.env.SMTPUSER }}"
+            - name: SMTP_PORT
+              value: "{{ .Values.env.SMTPPORT }}"
+            - name: SMTP_EMAIL_FROM
+              value: "{{ .Values.env.SMTPSENDER }}"
+            - name: SUPPORT_MAIL_TO
+              value: "{{ .Values.env.SMTPMAILTO }}"
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
